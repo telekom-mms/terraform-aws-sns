@@ -16,23 +16,23 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # SNS Topic
-# PSA Compliance: Req 3.50-01 (Encryption at rest)
+# PSA Compliance: Req 1 (encryption)
 resource "aws_sns_topic" "this" {
-  name                        = var.topic_name != "" ? var.topic_name : "${local.name_prefix}-topic"
-  display_name                = var.display_name != "" ? var.display_name : (var.topic_name != "" ? var.topic_name : "${local.name_prefix}-topic")
+  name                        = local.final_topic_name
+  display_name                = var.display_name != "" ? var.display_name : local.final_topic_name
   delivery_policy             = var.delivery_policy
   kms_master_key_id           = var.kms_master_key_id
   fifo_topic                  = var.fifo_topic
   content_based_deduplication = var.content_based_deduplication
 
   tags = merge(local.common_tags, {
-    "Name"          = var.topic_name != "" ? var.topic_name : "${local.name_prefix}-topic"
+    "Name"          = local.final_topic_name
     "PSA-Compliant" = "true"
   })
 }
 
 # Default SNS Policy Document
-# PSA Compliance: Least privilege access control
+# PSA Compliance: Req 8 (notification security)
 data "aws_iam_policy_document" "default" {
   statement {
     sid       = "AllowPublishFromOwnAccount"
@@ -80,7 +80,7 @@ data "aws_iam_policy_document" "default" {
     }
   }
 
-  # PSA Compliance: Enforce SSL for all SNS actions
+  # PSA Compliance: Req 8 (notification security)
   statement {
     sid       = "EnforceSSL"
     effect    = "Deny"
@@ -137,7 +137,7 @@ resource "aws_sns_topic_subscription" "sqs" {
 }
 
 # SQS Queue Policies for SNS
-# PSA Compliance: Cross-service restricted access
+# PSA Compliance: Req 8 (notification security)
 resource "aws_sqs_queue_policy" "sns_access" {
   count     = var.create_sqs_permissions ? length(var.sqs_subscriptions) : 0
   queue_url = replace(var.sqs_subscriptions[count.index].queue_arn, "arn:aws:sqs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:", "https://sqs.${data.aws_region.current.id}.amazonaws.com/${data.aws_caller_identity.current.account_id}/")
@@ -174,7 +174,7 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # HTTP/HTTPS Subscriptions
-# PSA Compliance: Enforce HTTPS where possible
+# PSA Compliance: Req 8 (notification security)
 resource "aws_sns_topic_subscription" "http" {
   count                = length(var.http_subscriptions)
   topic_arn            = aws_sns_topic.this.arn
